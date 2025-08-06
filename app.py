@@ -540,11 +540,11 @@ HTML_TEMPLATE = '''
                 </div>
             </div>
             
-            <form method='post' action='/validate/cert-key' enctype='multipart/form-data' class='validateForm'>
+            <form method='post' action='/validate/cert-key' enctype='multipart/form-data' class='validateForm' id='certKeyForm'>
                 <div class='form-group'>
                     <label for='cert'>Certificate File</label>
                     <div class='file-input-wrapper'>
-                        <input type='file' name='cert' id='cert' accept='.pem,.der,.crt,.cer,.pfx,.p12' required>
+                        <input type='file' name='cert' id='cert' accept='.pem,.der,.crt,.cer,.pfx,.p12'>
                         <label for='cert' class='file-input-label' id='certLabel'>
                             Choose certificate file...
                         </label>
@@ -554,7 +554,7 @@ HTML_TEMPLATE = '''
                 <div class='form-group'>
                     <label for='key'>Private Key File</label>
                     <div class='file-input-wrapper'>
-                        <input type='file' name='key' id='key' accept='.key,.pem' required>
+                        <input type='file' name='key' id='key' accept='.key,.pem'>
                         <label for='key' class='file-input-label' id='keyLabel'>
                             Choose private key file...
                         </label>
@@ -580,7 +580,7 @@ HTML_TEMPLATE = '''
                     Validate Certificate
                 </button>
                 
-                <div class='loading'>
+                <div class='loading' id='certKeyLoading'>
                     <div class='spinner'></div>
                     <p style='margin-top: 10px; color: #94a3b8;'>Validating certificate...</p>
                 </div>
@@ -771,225 +771,135 @@ HTML_TEMPLATE = '''
     <script>
         // Tab switching
         function switchTab(tabName) {
-            // Update tab buttons
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
             event.target.classList.add('active');
             
-            // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
             document.getElementById(tabName).classList.add('active');
         }
         
-        // File input handling with progress indication
-        function handleFileSelect(inputId, labelId, fileType) {
-            const input = document.getElementById(inputId);
-            const label = document.getElementById(labelId);
+        // File input handling
+        document.addEventListener('DOMContentLoaded', function() {
+            // Certificate file input
+            const certInput = document.getElementById('cert');
+            const certLabel = document.getElementById('certLabel');
             
-            // Add click handler to show loading state immediately
-            label?.addEventListener('click', function() {
-                // Show loading state when file dialog opens
-                if (!input.files || !input.files[0]) {
-                    label.textContent = 'Selecting file...';
-                    label.classList.add('loading');
-                    label.style.cursor = 'wait';
-                    
-                    // Reset after a timeout if no file was selected
-                    setTimeout(() => {
-                        if (!input.files || !input.files[0]) {
-                            const defaultText = fileType === 'cert' ? 'Choose certificate file...' : 
-                                               fileType === 'key' ? 'Choose private key file...' : 
-                                               'Choose certificate chain file...';
-                            label.textContent = defaultText;
-                            label.classList.remove('loading');
-                            label.style.cursor = 'pointer';
-                        }
-                    }, 5000);
-                }
-            });
-            
-            input?.addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                const defaultText = fileType === 'cert' ? 'Choose certificate file...' : 
-                                   fileType === 'key' ? 'Choose private key file...' : 
-                                   'Choose certificate chain file...';
-                
-                if (file) {
-                    // Show loading state immediately
-                    label.textContent = 'Processing: ' + file.name;
-                    label.classList.add('loading');
-                    label.style.cursor = 'wait';
-                    
-                    // Add loading animation
-                    const originalHTML = label.innerHTML;
-                    let dots = '';
-                    const loadingInterval = setInterval(() => {
-                        dots = dots.length >= 3 ? '' : dots + '.';
-                        label.textContent = `Processing: ${file.name}${dots}`;
-                    }, 300);
-                    
-                    // Simulate file processing delay (actual file reading happens on form submit)
-                    setTimeout(() => {
-                        clearInterval(loadingInterval);
-                        label.textContent = file.name;
-                        label.classList.remove('loading');
-                        label.classList.add('has-file');
-                        label.style.cursor = 'pointer';
-                    }, 500);
+            certInput?.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    certLabel.textContent = e.target.files[0].name;
+                    certLabel.classList.add('has-file');
                 } else {
-                    label.textContent = defaultText;
-                    label.classList.remove('has-file', 'loading');
-                    label.style.cursor = 'pointer';
+                    certLabel.textContent = 'Choose certificate file...';
+                    certLabel.classList.remove('has-file');
                 }
             });
-        }
-        
-        // Initialize file handlers
-        handleFileSelect('cert', 'certLabel', 'cert');
-        handleFileSelect('key', 'keyLabel', 'key');
-        handleFileSelect('chain_file', 'chainLabel', 'chain');
-        
-        // Form validation with better loading state
-        document.querySelectorAll('.validateForm').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                // For cert-key form, check if files are selected
-                if (this.action.includes('/validate/cert-key')) {
-                    const certInput = document.getElementById('cert');
-                    const keyInput = document.getElementById('key');
-                    
-                    if (!certInput.files[0] || !keyInput.files[0]) {
-                        e.preventDefault();
-                        alert('Please select both certificate and key files.');
-                        return false;
-                    }
+            
+            // Key file input
+            const keyInput = document.getElementById('key');
+            const keyLabel = document.getElementById('keyLabel');
+            
+            keyInput?.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    keyLabel.textContent = e.target.files[0].name;
+                    keyLabel.classList.add('has-file');
+                } else {
+                    keyLabel.textContent = 'Choose private key file...';
+                    keyLabel.classList.remove('has-file');
                 }
-                
-                // For chain form, check if file is selected
-                if (this.action.includes('/validate/chain')) {
-                    const chainInput = document.getElementById('chain_file');
-                    
-                    if (!chainInput.files[0]) {
-                        e.preventDefault();
-                        alert('Please select a certificate chain file.');
-                        return false;
-                    }
+            });
+            
+            // Chain file input
+            const chainInput = document.getElementById('chain_file');
+            const chainLabel = document.getElementById('chainLabel');
+            
+            chainInput?.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    chainLabel.textContent = e.target.files[0].name;
+                    chainLabel.classList.add('has-file');
+                } else {
+                    chainLabel.textContent = 'Choose certificate chain file...';
+                    chainLabel.classList.remove('has-file');
                 }
+            });
+            
+            // Form submission handling for cert-key form
+            const certKeyForm = document.getElementById('certKeyForm');
+            certKeyForm?.addEventListener('submit', function(e) {
+                const cert = document.getElementById('cert');
+                const key = document.getElementById('key');
                 
-                const submitBtn = this.querySelector('.submitBtn');
-                const loading = this.querySelector('.loading');
-                const formInputs = this.querySelectorAll('input, button');
+                console.log('Form submitting...', cert.files, key.files);
                 
-                // Check file sizes before submit
-                const fileInputs = this.querySelectorAll('input[type="file"]');
-                let totalSize = 0;
-                let hasLargeFile = false;
-                
-                fileInputs.forEach(input => {
-                    if (input.files[0]) {
-                        totalSize += input.files[0].size;
-                        if (input.files[0].size > 1024 * 1024) { // 1MB
-                            hasLargeFile = true;
-                        }
-                    }
-                });
+                if (!cert.files || !cert.files[0] || !key.files || !key.files[0]) {
+                    e.preventDefault();
+                    alert('Please select both certificate and key files.');
+                    return false;
+                }
                 
                 // Show loading state
+                const loading = document.getElementById('certKeyLoading');
+                const submitBtn = this.querySelector('.submitBtn');
+                
                 loading.style.display = 'block';
                 submitBtn.disabled = true;
+                submitBtn.textContent = 'Uploading and validating...';
                 
-                // Update button text based on file size
-                if (hasLargeFile) {
-                    submitBtn.textContent = 'Uploading large files...';
+                // Visual feedback
+                this.style.opacity = '0.7';
+                
+                console.log('Form submitted with files:', cert.files[0].name, key.files[0].name);
+            });
+            
+            // Other form submissions
+            document.querySelectorAll('.validateForm').forEach(form => {
+                if (form.id !== 'certKeyForm') {
+                    form.addEventListener('submit', function(e) {
+                        const loading = this.querySelector('.loading');
+                        const submitBtn = this.querySelector('.submitBtn');
+                        
+                        loading.style.display = 'block';
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'Processing...';
+                        this.style.opacity = '0.7';
+                    });
+                }
+            });
+            
+            // Domain validation
+            document.getElementById('domain')?.addEventListener('input', function(e) {
+                const value = e.target.value;
+                const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*[a-zA-Z0-9]$/;
+                if (value && !domainPattern.test(value)) {
+                    e.target.style.borderColor = '#ef4444';
                 } else {
-                    submitBtn.textContent = 'Processing...';
+                    e.target.style.borderColor = '#475569';
                 }
-                
-                // Disable all form inputs during processing
-                formInputs.forEach(input => {
-                    input.disabled = true;
-                });
-                
-                // Add visual feedback to the form
-                this.style.opacity = '0.8';
+            });
+            
+            // Port validation
+            document.getElementById('port')?.addEventListener('input', function(e) {
+                const value = e.target.value;
+                const port = parseInt(value);
+                if (value && (isNaN(port) || port < 1 || port > 65535)) {
+                    e.target.style.borderColor = '#ef4444';
+                } else {
+                    e.target.style.borderColor = '#475569';
+                }
             });
         });
         
-        // Domain input validation
-        document.getElementById('domain')?.addEventListener('input', function(e) {
-            const value = e.target.value;
-            const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*[a-zA-Z0-9]$/;
-            if (value && !domainPattern.test(value)) {
-                e.target.style.borderColor = '#ef4444';
-            } else {
-                e.target.style.borderColor = '#475569';
-            }
-        });
-        
-        // Port validation
-        document.getElementById('port')?.addEventListener('input', function(e) {
-            const value = e.target.value;
-            const port = parseInt(value);
-            if (value && (isNaN(port) || port < 1 || port > 65535)) {
-                e.target.style.borderColor = '#ef4444';
-            } else {
-                e.target.style.borderColor = '#475569';
-            }
-        });
-        
-        // Restore active tab if result is present
+        // Restore active tab
         {% if active_tab %}
-        switchTab('{{ active_tab }}');
-        document.querySelector('.tab.active').classList.remove('active');
-        document.querySelector('.tab[onclick*="{{ active_tab }}"]').classList.add('active');
-        {% endif %}
-        
-        // Add visual feedback for file drag and drop
-        document.querySelectorAll('.file-input-label').forEach(label => {
-            const input = label.previousElementSibling;
-            
-            // Prevent default drag behaviors
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-                label.addEventListener(eventName, preventDefaults, false);
-                document.body.addEventListener(eventName, preventDefaults, false);
-            });
-            
-            function preventDefaults(e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            
-            // Highlight drop area when item is dragged over it
-            ['dragenter', 'dragover'].forEach(eventName => {
-                label.addEventListener(eventName, () => {
-                    label.classList.add('dragover');
-                    label.style.borderColor = '#38bdf8';
-                    label.style.background = '#2d4a60';
-                }, false);
-            });
-            
-            ['dragleave', 'drop'].forEach(eventName => {
-                label.addEventListener(eventName, () => {
-                    label.classList.remove('dragover');
-                    label.style.borderColor = '';
-                    label.style.background = '';
-                }, false);
-            });
-            
-            // Handle dropped files
-            label.addEventListener('drop', (e) => {
-                const dt = e.dataTransfer;
-                const files = dt.files;
-                
-                if (files.length > 0) {
-                    input.files = files;
-                    const event = new Event('change', { bubbles: true });
-                    input.dispatchEvent(event);
-                }
-            }, false);
+        document.addEventListener('DOMContentLoaded', function() {
+            switchTab('{{ active_tab }}');
+            document.querySelector('.tab.active').classList.remove('active');
+            document.querySelector('.tab[onclick*="{{ active_tab }}"]').classList.add('active');
         });
+        {% endif %}
     </script>
 </body>
 </html>
