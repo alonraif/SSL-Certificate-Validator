@@ -179,10 +179,70 @@ HTML_TEMPLATE = '''
             color: #cbd5e1;
         }
         
+        .file-input-label.loading {
+            background: #1e3a5f;
+            border-color: #64748b;
+            color: #94a3b8;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .file-input-label.loading::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.3), transparent);
+            animation: loading-sweep 1.5s linear infinite;
+        }
+        
+        @keyframes loading-sweep {
+            to { left: 100%; }
+        }
+        
+        .upload-progress {
+            display: none;
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #38bdf8;
+        }
+        
         .file-input-label.has-file {
             background: #1e3a5f;
             border-color: #38bdf8;
             color: #38bdf8;
+        }
+        
+        .file-input-label.loading {
+            background: #1e3a5f;
+            border-color: #64748b;
+            color: #94a3b8;
+            position: relative;
+            overflow: hidden;
+            cursor: wait !important;
+        }
+        
+        .file-input-label.loading::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.3), transparent);
+            animation: loading-sweep 1.5s linear infinite;
+        }
+        
+        @keyframes loading-sweep {
+            to { left: 100%; }
+        }
+        
+        .file-input-label.dragover {
+            background: #2d4a60 !important;
+            border-color: #38bdf8 !important;
+            transform: scale(1.02);
         }
         
         input[type=password], input[type=text], input[type=url] {
@@ -724,38 +784,91 @@ HTML_TEMPLATE = '''
             document.getElementById(tabName).classList.add('active');
         }
         
-        // File input handling
-        document.getElementById('cert')?.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || 'Choose certificate file...';
-            const label = document.getElementById('certLabel');
-            label.textContent = fileName;
-            label.classList.toggle('has-file', e.target.files.length > 0);
-        });
+        // File input handling with progress indication
+        function handleFileSelect(inputId, labelId, fileType) {
+            const input = document.getElementById(inputId);
+            const label = document.getElementById(labelId);
+            
+            input?.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                const defaultText = fileType === 'cert' ? 'Choose certificate file...' : 
+                                   fileType === 'key' ? 'Choose private key file...' : 
+                                   'Choose certificate chain file...';
+                
+                if (file) {
+                    // Show loading state immediately
+                    label.textContent = 'Processing: ' + file.name;
+                    label.classList.add('loading');
+                    label.style.cursor = 'wait';
+                    
+                    // Add loading animation
+                    const originalHTML = label.innerHTML;
+                    let dots = '';
+                    const loadingInterval = setInterval(() => {
+                        dots = dots.length >= 3 ? '' : dots + '.';
+                        label.textContent = `Processing: ${file.name}${dots}`;
+                    }, 300);
+                    
+                    // Simulate file processing delay (actual file reading happens on form submit)
+                    setTimeout(() => {
+                        clearInterval(loadingInterval);
+                        label.textContent = file.name;
+                        label.classList.remove('loading');
+                        label.classList.add('has-file');
+                        label.style.cursor = 'pointer';
+                    }, 500);
+                } else {
+                    label.textContent = defaultText;
+                    label.classList.remove('has-file', 'loading');
+                    label.style.cursor = 'pointer';
+                }
+            });
+        }
         
-        document.getElementById('key')?.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || 'Choose private key file...';
-            const label = document.getElementById('keyLabel');
-            label.textContent = fileName;
-            label.classList.toggle('has-file', e.target.files.length > 0);
-        });
+        // Initialize file handlers
+        handleFileSelect('cert', 'certLabel', 'cert');
+        handleFileSelect('key', 'keyLabel', 'key');
+        handleFileSelect('chain_file', 'chainLabel', 'chain');
         
-        document.getElementById('chain_file')?.addEventListener('change', function(e) {
-            const fileName = e.target.files[0]?.name || 'Choose certificate chain file...';
-            const label = document.getElementById('chainLabel');
-            label.textContent = fileName;
-            label.classList.toggle('has-file', e.target.files.length > 0);
-        });
-        
-        // Form validation
+        // Form validation with better loading state
         document.querySelectorAll('.validateForm').forEach(form => {
             form.addEventListener('submit', function(e) {
                 const submitBtn = this.querySelector('.submitBtn');
                 const loading = this.querySelector('.loading');
+                const formInputs = this.querySelectorAll('input, button');
+                
+                // Check file sizes before submit
+                const fileInputs = this.querySelectorAll('input[type="file"]');
+                let totalSize = 0;
+                let hasLargeFile = false;
+                
+                fileInputs.forEach(input => {
+                    if (input.files[0]) {
+                        totalSize += input.files[0].size;
+                        if (input.files[0].size > 1024 * 1024) { // 1MB
+                            hasLargeFile = true;
+                        }
+                    }
+                });
                 
                 // Show loading state
                 loading.style.display = 'block';
                 submitBtn.disabled = true;
-                submitBtn.textContent = 'Processing...';
+                
+                // Update button text based on file size
+                if (hasLargeFile) {
+                    submitBtn.textContent = 'Uploading large files...';
+                } else {
+                    submitBtn.textContent = 'Processing...';
+                }
+                
+                // Disable all form inputs during processing
+                formInputs.forEach(input => {
+                    input.disabled = true;
+                });
+                
+                // Add visual feedback to the form
+                this.style.opacity = '0.8';
             });
         });
         
@@ -787,6 +900,51 @@ HTML_TEMPLATE = '''
         document.querySelector('.tab.active').classList.remove('active');
         document.querySelector('.tab[onclick*="{{ active_tab }}"]').classList.add('active');
         {% endif %}
+        
+        // Add visual feedback for file drag and drop
+        document.querySelectorAll('.file-input-label').forEach(label => {
+            const input = label.previousElementSibling;
+            
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            // Highlight drop area when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.add('dragover');
+                    label.style.borderColor = '#38bdf8';
+                    label.style.background = '#2d4a60';
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                label.addEventListener(eventName, () => {
+                    label.classList.remove('dragover');
+                    label.style.borderColor = '';
+                    label.style.background = '';
+                }, false);
+            });
+            
+            // Handle dropped files
+            label.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    input.files = files;
+                    const event = new Event('change', { bubbles: true });
+                    input.dispatchEvent(event);
+                }
+            }, false);
+        });
     </script>
 </body>
 </html>
