@@ -562,13 +562,13 @@ HTML_TEMPLATE = '''
             <form method='post' action='/validate/url' class='validateForm'>
                 <div class='form-group'>
                     <label for='url'>Website URL</label>
-                    <input type='url' name='url' id='url' placeholder='https://example.com' required>
-                    <p class='url-example'>Enter the full URL including https://</p>
+                    <input type='text' name='url' id='url' placeholder='example.com or https://example.com' required>
+                    <p class='url-example'>Enter domain name or full URL (https:// is optional)</p>
                 </div>
                 
                 <div class='form-group'>
                     <label for='port'>Port (optional)</label>
-                    <input type='text' name='port' id='port' placeholder='443' pattern='[0-9]+'>
+                    <input type='text' name='port' id='port' placeholder='443'>
                     <p class='url-example'>Default: 443. Change for non-standard HTTPS ports</p>
                 </div>
                 
@@ -878,21 +878,30 @@ class CertificateValidator:
                 with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                     # Get the certificate in DER format
                     der_cert = ssock.getpeercert(True)
-                    # Get the full peer certificate chain
-                    peer_cert_chain = ssock.getpeercert_chain()
                     
-                    # Convert to x509 objects
+                    # Convert to x509 object
                     cert = x509.load_der_x509_certificate(der_cert, default_backend())
                     
-                    # Get full chain if available
+                    # Try to get the full certificate chain
                     chain = []
-                    if peer_cert_chain:
-                        for cert_der in peer_cert_chain:
-                            try:
-                                chain_cert = x509.load_der_x509_certificate(cert_der, default_backend())
-                                chain.append(chain_cert)
-                            except:
-                                pass
+                    
+                    # For Python 3.10+, use getpeercert_chain if available
+                    if hasattr(ssock, 'getpeercert_chain'):
+                        peer_cert_chain = ssock.getpeercert_chain()
+                        if peer_cert_chain:
+                            for cert_der in peer_cert_chain:
+                                try:
+                                    chain_cert = x509.load_der_x509_certificate(cert_der, default_backend())
+                                    chain.append(chain_cert)
+                                except:
+                                    pass
+                    else:
+                        # For older Python versions, just add the server certificate
+                        chain = [cert]
+                    
+                    # If chain is empty or only has one cert, try to build it
+                    if not chain or len(chain) == 1:
+                        chain = [cert]
                     
                     return cert, chain, hostname
                     
@@ -1466,7 +1475,7 @@ def validate_url():
     try:
         # Get form data
         url = request.form.get('url', '').strip()
-        port = request.form.get('port', '443').strip()
+        port_str = request.form.get('port', '').strip()
         check_hostname = request.form.get('check_hostname', 'on') == 'on'
         
         if not url:
@@ -1477,14 +1486,18 @@ def validate_url():
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
         
-        # Validate port
-        try:
-            port = int(port)
-            if port < 1 or port > 65535:
-                raise ValueError
-        except:
-            flash('Invalid port number. Please enter a number between 1 and 65535.', 'error')
-            return redirect(url_for('index'))
+        # Parse port with default
+        if port_str:
+            try:
+                port = int(port_str)
+                if port < 1 or port > 65535:
+                    raise ValueError
+            except:
+                flash('Invalid port number. Please enter a number between 1 and 65535.', 'error')
+                session['active_tab'] = 'url-check'
+                return redirect(url_for('index'))
+        else:
+            port = 443  # Default HTTPS port
         
         # Fetch certificate from URL
         cert, chain, hostname = validator.get_url_certificate(url, port)
