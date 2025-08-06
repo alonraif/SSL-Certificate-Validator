@@ -789,6 +789,28 @@ HTML_TEMPLATE = '''
             const input = document.getElementById(inputId);
             const label = document.getElementById(labelId);
             
+            // Add click handler to show loading state immediately
+            label?.addEventListener('click', function() {
+                // Show loading state when file dialog opens
+                if (!input.files || !input.files[0]) {
+                    label.textContent = 'Selecting file...';
+                    label.classList.add('loading');
+                    label.style.cursor = 'wait';
+                    
+                    // Reset after a timeout if no file was selected
+                    setTimeout(() => {
+                        if (!input.files || !input.files[0]) {
+                            const defaultText = fileType === 'cert' ? 'Choose certificate file...' : 
+                                               fileType === 'key' ? 'Choose private key file...' : 
+                                               'Choose certificate chain file...';
+                            label.textContent = defaultText;
+                            label.classList.remove('loading');
+                            label.style.cursor = 'pointer';
+                        }
+                    }, 5000);
+                }
+            });
+            
             input?.addEventListener('change', function(e) {
                 const file = e.target.files[0];
                 const defaultText = fileType === 'cert' ? 'Choose certificate file...' : 
@@ -833,6 +855,29 @@ HTML_TEMPLATE = '''
         // Form validation with better loading state
         document.querySelectorAll('.validateForm').forEach(form => {
             form.addEventListener('submit', function(e) {
+                // For cert-key form, check if files are selected
+                if (this.action.includes('/validate/cert-key')) {
+                    const certInput = document.getElementById('cert');
+                    const keyInput = document.getElementById('key');
+                    
+                    if (!certInput.files[0] || !keyInput.files[0]) {
+                        e.preventDefault();
+                        alert('Please select both certificate and key files.');
+                        return false;
+                    }
+                }
+                
+                // For chain form, check if file is selected
+                if (this.action.includes('/validate/chain')) {
+                    const chainInput = document.getElementById('chain_file');
+                    
+                    if (!chainInput.files[0]) {
+                        e.preventDefault();
+                        alert('Please select a certificate chain file.');
+                        return false;
+                    }
+                }
+                
                 const submitBtn = this.querySelector('.submitBtn');
                 const loading = this.querySelector('.loading');
                 const formInputs = this.querySelectorAll('input, button');
@@ -1440,8 +1485,13 @@ def validate_cert_key():
         cert_file = request.files.get('cert')
         key_file = request.files.get('key')
         
-        if not cert_file or not key_file:
+        # Debug logging
+        logger.info(f"Certificate file: {cert_file.filename if cert_file else 'None'}")
+        logger.info(f"Key file: {key_file.filename if key_file else 'None'}")
+        
+        if not cert_file or not key_file or cert_file.filename == '' or key_file.filename == '':
             flash('Both certificate and key files are required.', 'error')
+            session['active_tab'] = 'cert-key'
             return redirect(url_for('index'))
         
         # Validate file extensions
