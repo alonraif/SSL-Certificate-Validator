@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 import concurrent.futures
 import logging
 from io import BytesIO
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.wrappers import Response
 
 app = Flask(__name__)
 
@@ -33,6 +35,12 @@ TEMP_FILE_PREFIX = 'ssl_validator_'
 
 # Use system temp directory
 TEMP_DIR = tempfile.gettempdir()
+
+# Base URL prefix for mounting under a subpath (e.g., /cert-validator)
+URL_PREFIX = os.environ.get('URL_PREFIX', '/cert-validator').strip()
+if not URL_PREFIX.startswith('/'):
+    URL_PREFIX = '/' + URL_PREFIX
+URL_PREFIX = URL_PREFIX.rstrip('/')
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -540,7 +548,7 @@ HTML_TEMPLATE = '''
                 </div>
             </div>
             
-            <form method='post' action='/validate/cert-key' enctype='multipart/form-data' class='validateForm' id='certKeyForm'>
+            <form method='post' action='{{ url_for('validate_cert_key') }}' enctype='multipart/form-data' class='validateForm' id='certKeyForm'>
                 <div class='form-group'>
                     <label for='cert'>Certificate File</label>
                     <div class='file-input-wrapper'>
@@ -619,7 +627,7 @@ HTML_TEMPLATE = '''
                 </div>
             </div>
             
-            <form method='post' action='/validate/url' class='validateForm'>
+            <form method='post' action='{{ url_for('validate_url') }}' class='validateForm'>
                 <div class='form-group'>
                     <label for='url'>Website URL</label>
                     <input type='text' name='url' id='url' placeholder='example.com or https://example.com' required>
@@ -680,7 +688,7 @@ HTML_TEMPLATE = '''
                 </div>
             </div>
             
-            <form method='post' action='/validate/chain' enctype='multipart/form-data' class='validateForm'>
+            <form method='post' action='{{ url_for('validate_chain_only') }}' enctype='multipart/form-data' class='validateForm'>
                 <div class='chain-order-info'>
                     <strong>Note:</strong> Upload a file containing the full certificate chain. The validator will check if certificates are in the correct order (server → intermediate → root) and offer to fix any issues.
                 </div>
@@ -1569,9 +1577,9 @@ def validate_cert_key():
         session['result'] = '\n'.join(result_lines)
         session['result_type'] = result_type
         session['download_links'] = {
-            'chain': '/download/chain',
-            'report': '/download/report',
-            'json': '/download/json'
+            'chain': url_for('download_file', file_type='chain'),
+            'report': url_for('download_file', file_type='report'),
+            'json': url_for('download_file', file_type='json')
         }
         session['active_tab'] = 'cert-key'
         
@@ -1733,9 +1741,9 @@ def validate_url():
         session['result'] = '\n'.join(result_lines)
         session['result_type'] = result_type
         session['download_links'] = {
-            'chain': '/download/chain',
-            'report': '/download/report',
-            'json': '/download/json'
+            'chain': url_for('download_file', file_type='chain'),
+            'report': url_for('download_file', file_type='report'),
+            'json': url_for('download_file', file_type='json')
         }
         session['active_tab'] = 'url-check'
         
@@ -1889,9 +1897,9 @@ def validate_chain_only():
         
         # Prepare download links
         download_links = {
-            'chain': '/download/chain',
-            'report': '/download/report',
-            'json': '/download/json'
+            'chain': url_for('download_file', file_type='chain'),
+            'report': url_for('download_file', file_type='report'),
+            'json': url_for('download_file', file_type='json')
         }
         
         # Save fixed chain if order was incorrect
@@ -1909,7 +1917,7 @@ def validate_chain_only():
             with open(fixed_chain_path, 'wb') as f:
                 f.write(fixed_chain_pem)
             
-            download_links['fixed_chain'] = '/download/fixed_chain'
+            download_links['fixed_chain'] = url_for('download_file', file_type='fixed_chain')
             result_lines.append(f"\n⚠️ Chain order needs fixing. Download the corrected chain below.")
         
         # Generate reports
@@ -1973,6 +1981,10 @@ def server_error(e):
     logger.error(f"Server error: {str(e)}", exc_info=True)
     flash('An internal error occurred. Please try again.', 'error')
     return redirect(url_for('index'))
+
+# Mount the app under URL_PREFIX if not at root
+if URL_PREFIX not in ('', '/'):
+    app.wsgi_app = DispatcherMiddleware(Response('Not Found', status=404), {URL_PREFIX: app.wsgi_app})
 
 if __name__ == '__main__':
     # Get port from environment variable (Render sets this)
