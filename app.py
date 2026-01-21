@@ -37,7 +37,7 @@ TEMP_FILE_PREFIX = 'ssl_validator_'
 TEMP_DIR = tempfile.gettempdir()
 
 # Base URL prefix for mounting under a subpath (e.g., /cert-validator)
-URL_PREFIX = os.environ.get('URL_PREFIX', '/cert-validator').strip()
+URL_PREFIX = os.environ.get('URL_PREFIX', '').strip()
 if not URL_PREFIX.startswith('/'):
     URL_PREFIX = '/' + URL_PREFIX
 URL_PREFIX = URL_PREFIX.rstrip('/')
@@ -1988,7 +1988,7 @@ if URL_PREFIX not in ('', '/'):
 
 if __name__ == '__main__':
     # Get port from environment variable (Render sets this)
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 8080))
     
     # Run the app
     app.run(host='0.0.0.0', port=port, debug=False)
